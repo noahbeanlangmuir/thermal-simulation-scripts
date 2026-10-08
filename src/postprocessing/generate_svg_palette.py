@@ -11,12 +11,25 @@ Adding color palette scale to frame:
     composite -gravity east scale.png frame.png output.png
 """
 
+import json
+import sys
+from pathlib import Path
+
 from matplotlib import pyplot as plt
 import matplotlib
 import numpy as np
 
-tmax = 150
-tmin = 0
+# Labels must match the colour range used for the glTF frames:
+#   python generate_svg_palette.py [TMIN TMAX]   (deg C)
+# without arguments the range written by `tpost generate-gltf` (gltf/range.json) is used
+if len(sys.argv) == 3:
+    tmin, tmax = float(sys.argv[1]), float(sys.argv[2])
+elif Path("gltf/range.json").exists():
+    r = json.loads(Path("gltf/range.json").read_text())
+    tmin, tmax = r["tmin_C"], r["tmax_C"]
+else:
+    sys.exit("Give TMIN TMAX in C, or run from the folder where `tpost generate-gltf` wrote gltf/range.json")
+print(f"Scale bar {tmin:.1f}..{tmax:.1f} C")
 
 # Color palette hex color codes
 hex_colors = [
@@ -39,7 +52,7 @@ a = np.outer(np.arange(0, 1, 0.01), np.ones(10))
 
 # Add temperature scale to y axis legend
 plt.ylabel("Temperature [°C]", fontsize=12)
-x = list(range(tmax, tmin - 1, -15))
+x = [f"{t:.0f}" for t in np.linspace(tmax, tmin, 11)]
 num_rows = a.shape[0]
 tick_positions = np.linspace(0, num_rows - 1, len(x))
 

@@ -29,7 +29,7 @@ dependencies = [
     "bpy==4.4.0"
 ]
 
-scripts = {tpost="postprocessing.main:main", tpre="preprocessing.main:main", plot-meas="postprocessing.plot_meas:main"}
+scripts = {tpost="postprocessing.main:main", tpre="preprocessing.main:main"}
 
 [tool.setuptools.package-data]
 postprocessing = ["*.mplstyle"]

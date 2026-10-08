@@ -118,6 +118,17 @@ def lumped_transient(t: float, power_w: float, h: float, area_m2: float, tau: fl
 
 
 def _b1_table() -> str:
+    import logging
+
+    # the table has its own "in range" column; skip the per-call extrapolation warnings
+    logging.disable(logging.WARNING)
+    try:
+        return _b1_rows()
+    finally:
+        logging.disable(logging.NOTSET)
+
+
+def _b1_rows() -> str:
     import sys
     from pathlib import Path
 

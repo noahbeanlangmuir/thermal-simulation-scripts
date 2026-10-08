@@ -1,0 +1,110 @@
+{
+  "params": {
+    "ambient_C": 25.0,
+    "heater_C": 150.0,
+    "heater_size": [
+      5.0,
+      25.0,
+      25.0
+    ],
+    "heater_emissivity": 0.9,
+    "gap": 20.0,
+    "block_size": [
+      20.0,
+      50.0,
+      50.0
+    ],
+    "block_material": "Aluminium6061",
+    "block_emissivities": {
+      "bare": 0.09,
+      "anodised": 0.85
+    },
+    "rise_guess_K": {
+      "bare": 1.0,
+      "anodised": 4.0
+    },
+    "time_end_s": 21600.0,
+    "max_step_s": 300.0,
+    "mesh_mm": 3.0,
+    "mesh_check_mm": 2.5
+  },
+  "variants": {
+    "bare": {
+      "emissivity": 0.09,
+      "nodes": 17796,
+      "cavity_faces": 3418,
+      "film_iterations": [
+        {
+          "assumed_rise": 1.0,
+          "h": {
+            "vertical": 3.324716595729982,
+            "top": 4.949608962723902,
+            "bottom": 2.474804481361951
+          },
+          "sim_rise": 1.2929586656539982
+        },
+        {
+          "assumed_rise": 1.2929586656539982,
+          "h": {
+            "vertical": 3.54528204786601,
+            "top": 5.277971608779764,
+            "bottom": 2.638985804389882
+          },
+          "sim_rise": 1.2238374246749117
+        }
+      ],
+      "final_block_mean_C": 26.22383742467491,
+      "final_block_max_C": 26.226,
+      "final_block_min_C": 26.222000000000037,
+      "face_spread_K": 0.003999999999962256,
+      "t63_min": 59.333,
+      "t95_min": 169.33333333333334,
+      "end_slope_K_per_h": 0.002585924311802046,
+      "approx_heat_into_block_W": 0.046056960944232415
+    },
+    "anodised": {
+      "emissivity": 0.85,
+      "nodes": 17831,
+      "cavity_faces": 3420,
+      "film_iterations": [
+        {
+          "assumed_rise": 4.0,
+          "h": {
+            "vertical": 4.701859300728246,
+            "top": 6.999804123527569,
+            "bottom": 3.4999020617637844
+          },
+          "sim_rise": 4.776684749620642
+        },
+        {
+          "assumed_rise": 4.776684749620642,
+          "h": {
+            "vertical": 4.91514434201307,
+            "top": 7.317328195598593,
+            "bottom": 3.6586640977992966
+          },
+          "sim_rise": 4.67607792125591
+        }
+      ],
+      "final_block_mean_C": 29.67607792125591,
+      "final_block_max_C": 29.69300000000004,
+      "final_block_min_C": 29.66500000000002,
+      "face_spread_K": 0.02800000000002001,
+      "t63_min": 24.333000000000002,
+      "t95_min": 74.333,
+      "end_slope_K_per_h": 6.983325896902487e-06,
+      "approx_heat_into_block_W": 0.4323618454296281
+    }
+  },
+  "mesh_check": {
+    "coarse_mm": 3.0,
+    "fine_mm": 2.5,
+    "coarse_rise": 4.67607792125591,
+    "fine_rise": 4.6759730283785075,
+    "diff_%": 0.0022432310187836535
+  },
+  "gas_conduction_estimate_W": {
+    "bare": 0.10830414225340947,
+    "anodised": 0.1052834318189011
+  }
+}

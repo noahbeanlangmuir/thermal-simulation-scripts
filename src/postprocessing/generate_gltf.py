@@ -1,5 +1,6 @@
 import paraview.simple as pvs
 import glob
+import json
 from pathlib import Path
 import os
 
@@ -35,16 +36,31 @@ def temperature_displayer(input_data, input_viewer, tmin, tmax):
     return temperature_display
 
 
-def generate(
-    output_dir: str = "gltf", t_min: float = 273.15, t_max: float = 423.15
-) -> None:
+def temperature_range(default=(273.15, 433.15)) -> tuple[float, float]:
+    """Colour range [K]: the simulated min/max from temperature.csv if present."""
+    try:
+        import csv
+
+        with open("temperature.csv") as f:
+            rows = list(csv.DictReader(f))
+        return min(float(r["min [K]"]) for r in rows), max(float(r["max [K]"]) for r in rows)
+    except (OSError, KeyError, ValueError):
+        print(f"temperature.csv not found or unreadable, colour range {default} K")
+        return default
+
+
+def generate(output_dir: str = "gltf") -> None:
     ensure_output_directory(output_dir)
     files = get_vtk_files()
-    print("Generating GLTF files...")
+    t_min, t_max = temperature_range()
+    # the scale bar (generate_svg_palette.py) reads this so its labels match
+    with open(f"{output_dir}/range.json", "w") as f:
+        json.dump({"tmin_C": t_min - 273.15, "tmax_C": t_max - 273.15}, f)
+    print(f"Generating GLTF files, colour range {t_min - 273.15:.1f}..{t_max - 273.15:.1f} C")
     for idx, file in enumerate(files):
         vtk_reader = pvs.OpenDataFile(file)
         render_view = pvs.GetActiveViewOrCreate("RenderView")
-        display = temperature_displayer(vtk_reader, render_view, 273.15, 433.15)
+        display = temperature_displayer(vtk_reader, render_view, t_min, t_max)
         pvs.UpdatePipeline()
         pvs.Render()
         filename = f"{output_dir}/{idx:04d}.gltf"

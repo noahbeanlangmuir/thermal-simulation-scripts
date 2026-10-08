@@ -1,0 +1,55 @@
+{
+  "reference_elmer_dTmax": 382.71993538033394,
+  "fin_2d_estimate_dTmax": 270.78167685752555,
+  "meshes": [
+    {
+      "mesh_mm": 8.0,
+      "nodes": 2637,
+      "dTmax": 342.78200000000004,
+      "dT_pkg_mean": 342.61947368421045,
+      "still_rising_K": 0.0
+    },
+    {
+      "mesh_mm": 4.0,
+      "nodes": 8879,
+      "dTmax": 374.553,
+      "dT_pkg_mean": 374.4127117437723,
+      "still_rising_K": 0.0
+    },
+    {
+      "mesh_mm": 2.0,
+      "nodes": 34510,
+      "dTmax": 383.995,
+      "dT_pkg_mean": 383.8367743506494,
+      "still_rising_K": 0.0
+    }
+  ],
+  "B5": {
+    "observed_order": 1.7505461118909749,
+    "GCI_fine_%": 1.2997001289686965,
+    "extrapolated_dTmax": 387.9876268081867,
+    "pass": true
+  },
+  "B4": {
+    "fine_dTmax": 383.995,
+    "reference": 382.71993538033394,
+    "err_%": 0.33315866297869423,
+    "pass": true
+  },
+  "S21_unfused": {
+    "detected_by_tpre": true,
+    "dTmax": 2000.23,
+    "plate_dTmax": 2000.02,
+    "status": "DETECTED (tpre stops)",
+    "warned": true
+  },
+  "S24_box_face_refs": {
+    "dTmax_box_refs": 272.54600000000005,
+    "dTmax_split_refs": 374.553,
+    "diff_%": -27.234329988012362,
+    "detected_by_tpre": true,
+    "status": "DETECTED (tpre stops)"
+  },
+  "pass": true,
+  "summary": "fine-mesh dTmax 384.00 K vs 3-D Elmer 382.72 K (+0.3 %); GCI 1.30 %; unfused: DETECTED (tpre stops); box-face refs -27.2 %"
+}

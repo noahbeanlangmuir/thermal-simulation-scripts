@@ -3,7 +3,10 @@ import pandas as pd
 from pathlib import Path
 
 
-def plot(legend, user_time, csv1, csv2, label1, label2, kelvin, fahrenheit, name):
+def plot(
+    legend, user_time, csv1, csv2, label1, label2, kelvin, fahrenheit, name,
+    output="comparison.png", show=False,
+):
     csv1_path = Path(csv1).resolve()
     csv2_path = Path(csv2).resolve()
     data1 = pd.read_csv(csv1_path)
@@ -37,4 +40,8 @@ def plot(legend, user_time, csv1, csv2, label1, label2, kelvin, fahrenheit, name
         plt.title(name)
     plt.xlabel("Time [s]")
     plt.grid()
-    plt.show()
+    plt.savefig(output)
+    print(f"Saved {Path(output).resolve()}")
+    if show:
+        plt.show()
+    plt.close()

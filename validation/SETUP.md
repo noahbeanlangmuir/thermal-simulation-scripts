@@ -11,6 +11,22 @@ This installs everything the validation plan needs inside your existing WSL **Ub
 | Elmer | latest | cross-code check (benchmark B6) |
 | jq, yq, ffmpeg, rsvg-convert, ImageMagick, gmsh | distro | scripts and media |
 
+> **Fastest route (no sudo, verified 2026-10-07):** this is what the validation run used on this machine. It installs everything under `~/tss-tools` without root, using a FreeCAD that bundles its own `ccx` and `gmsh`. In Ubuntu, run:
+>
+> ```bash
+> git clone /mnt/c/Users/NoahBean/Documents/GitHub/thermal-simulation-scripts ~/thermal-simulation-scripts
+> ```
+>
+> ```bash
+> WITH_ELMER=1 bash ~/thermal-simulation-scripts/validation/install_user.sh
+> ```
+>
+> ```bash
+> source ~/tss-env.sh
+> ```
+>
+> Then skip to [§8 Verify everything](#8-verify-everything). The `sudo`-based steps below are the README route, kept for the usability study.
+
 > **Log the friction.** You are also doing the "cold-start run" from §0 of the plan. Whenever a step differs from the project README, or something fails, add a row to [friction_log.md](friction_log.md).
 
 ---

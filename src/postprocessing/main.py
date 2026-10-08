@@ -3,8 +3,9 @@ from postprocessing import create_plot
 from postprocessing import plot_comparison
 from pathlib import Path
 import typer
-from typing import Optional
+from typing import List, Optional
 from enum import Enum
+import shutil
 import subprocess
 import logging
 
@@ -16,15 +17,55 @@ logging.basicConfig(
 
 
 @app.command()
+def convert(
+    frd: str = typer.Option("FEMMeshGmsh.frd", help="CalculiX result file (.frd)"),
+    vtk: str = typer.Option("vtk", help="Directory for the .vtk files"),
+):
+    """Convert .frd results to .vtk files in a clean vtk directory"""
+    frd_path = Path(frd).resolve()
+    if not frd_path.exists():
+        logging.error(f"{frd_path} not found. Run ccx first.")
+        raise typer.Exit(1)
+    vtk_dir = Path(vtk).resolve()
+    vtk_dir.mkdir(parents=True, exist_ok=True)
+    # old results would be mixed into the new time series
+    for old in vtk_dir.glob("*.vtk"):
+        old.unlink()
+    for old in frd_path.parent.glob(f"{frd_path.stem}*.vtk"):
+        old.unlink()
+    p = subprocess.run(["ccx2paraview", str(frd_path), "vtk"])
+    if p.returncode != 0:
+        logging.error(f"ccx2paraview exited {p.returncode}")
+        raise typer.Exit(1)
+    new = sorted(frd_path.parent.glob(f"{frd_path.stem}*.vtk"))
+    if not new:
+        logging.error("ccx2paraview produced no .vtk files")
+        raise typer.Exit(1)
+    for f in new:
+        shutil.move(str(f), vtk_dir / f.name)
+    logging.info(f"{len(new)} .vtk files in {vtk_dir}")
+
+
+@app.command()
 def csv(
     vtk: str = typer.Option("vtk", help="Path to directory with .vtk files"),
     sta: str = typer.Option(
         "FEMMeshGmsh.sta", help="Path to CalculiX time stamp file (.sta)"
     ),
     output: str = typer.Option("temperature.csv", help="Path to output file"),
+    region: List[str] = typer.Option(
+        [],
+        help="Extra columns for the nodes inside a box: NAME=xmin,ymin,zmin,xmax,ymax,zmax "
+        "(mm). Repeat for several parts, e.g. --region block=25,0,0,45,50,50",
+    ),
 ):
     """Generate csv file from simulation output"""
-    create_csv.main(vtk, sta, output)
+    try:
+        regions = create_csv.parse_regions(region)
+        create_csv.main(vtk, sta, output, regions)
+    except ValueError as e:
+        logging.error(str(e))
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -60,10 +101,12 @@ def compare_csv(
         False, help="Use Fahrenheit temperature scale"
     ),
     name: Optional[str] = typer.Option(None, help="Graph name"),
+    output: str = typer.Option("comparison.png", help="Path to the saved graph"),
+    show: bool = typer.Option(False, help="Also open the graph in a window"),
 ):
     """Compare two temperature plots on a common graph"""
     plot_comparison.plot(
-        legend, time, csv1, csv2, label1, label2, kelvin, fahrenheit, name
+        legend, time, csv1, csv2, label1, label2, kelvin, fahrenheit, name, output, show
     )
 
 
@@ -116,25 +159,45 @@ def save_camera(
     process_blend.save_camera_properties(blend, config)
 
 
+def _run_pvpython(script: str, out_dir: str) -> None:
+    """Run a ParaView script on ./vtk; stop with an error if it fails or
+    writes nothing to out_dir (ParaView can log errors and still exit 0)."""
+    import time
+
+    if not list(Path("vtk").glob("*.vtk")):
+        logging.error(f"No .vtk files in {Path('vtk').resolve()}. Run `tpost convert` first.")
+        raise typer.Exit(1)
+    if shutil.which("pvpython") is None:
+        logging.error("pvpython not found on PATH. Install ParaView and add its bin directory.")
+        raise typer.Exit(1)
+    start = time.time()
+    p = subprocess.run(["pvpython", str(Path(__file__).parent / script)])
+    if p.returncode != 0:
+        logging.error(f"pvpython {script} exited {p.returncode}")
+        raise typer.Exit(1)
+    new = [f for f in Path(out_dir).glob("*") if f.stat().st_mtime >= start - 1]
+    if not new:
+        logging.error(f"pvpython {script} finished but wrote nothing to {out_dir}/; see errors above")
+        raise typer.Exit(1)
+    logging.info(f"{len(new)} files written to {Path(out_dir).resolve()}")
+
+
 @app.command()
 def generate_gltf():
     """Generate gltf files for every time step."""
-    path = Path(__file__).parent
-    subprocess.run(["pvpython", str(path / "generate_gltf.py")])
+    _run_pvpython("generate_gltf.py", "gltf")
 
 
 @app.command()
 def preview():
     """Create paraview image previews."""
-    path = Path(__file__).parent
-    subprocess.run(["pvpython", str(path / "create_previews.py")])
+    _run_pvpython("create_previews.py", "previews")
 
 
 @app.command()
 def animation():
     """Create paraview animation."""
-    path = Path(__file__).parent
-    subprocess.run(["pvpython", str(path / "create_animation.py")])
+    _run_pvpython("create_animation.py", "animations")
 
 
 def main():

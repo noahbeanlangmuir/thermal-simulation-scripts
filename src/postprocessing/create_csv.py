@@ -1,6 +1,7 @@
 import vtkmodules.all as vtk
 from vtkmodules.util import numpy_support
 import glob
+import numpy as np
 import pandas as pd
 import typer
 
@@ -48,57 +49,89 @@ def find_array_id_by_name(point_data: vtk.vtkPointData, name: str) -> int | None
     return None
 
 
-def main(vtk_directory: str, sta_file: str, output_file: str) -> None:
+def parse_regions(specs: list[str]) -> dict[str, tuple[list[float], list[float]]]:
+    """Parse NAME=xmin,ymin,zmin,xmax,ymax,zmax (mm) into {name: (lo, hi)}."""
+    regions = {}
+    for spec in specs:
+        name, _, values = spec.partition("=")
+        nums = values.split(",")
+        if not name or len(nums) != 6:
+            raise ValueError(
+                f"--region {spec!r}: expected NAME=xmin,ymin,zmin,xmax,ymax,zmax (mm)"
+            )
+        v = [float(x) for x in nums]
+        regions[name.strip()] = (v[:3], v[3:])
+    return regions
+
+
+def main(
+    vtk_directory: str, sta_file: str, output_file: str, regions: dict | None = None
+) -> None:
     """Main script function.
 
     Keyword arguments:
     vtk_directory -- path to vtk directory
     sta_file -- path to CalculiX sta file
     output_file -- path to output csv file
+    regions -- {name: (lo, hi)} boxes in mm; adds max/mean/min columns per box
     """
-    max_K = []
-    min_K = []
-    max_C = []
-    min_C = []
-    max_F = []
-    min_F = []
+    regions = regions or {}
     files = get_vtk_files(vtk_directory)
+    if not files:
+        raise ValueError(f"No .vtk files in {vtk_directory}. Run `tpost convert` first.")
+    timesteps = get_timesteps(sta_file)
+    if len(files) != len(timesteps):
+        raise ValueError(
+            f"{len(files)} .vtk files in {vtk_directory} but {len(timesteps)} time steps in "
+            f"{sta_file}. Either old .vtk files from an earlier run are still there (run "
+            "`tpost convert`, which clears them) or the solver wrote results less often "
+            "than every increment (set OutputFrequency = 1)."
+        )
+
+    columns: dict[str, list] = {
+        name: [] for name in ("max [K]", "max [C]", "max [F]", "min [K]", "min [C]", "min [F]")
+    }
+    for name in regions:
+        for stat in ("max", "mean", "min"):
+            columns[f"{name} {stat} [C]"] = []
     for filename in files:
         reader = vtk.vtkUnstructuredGridReader()
         reader.SetFileName(filename)
         reader.Update()
         point_data = reader.GetOutput().GetPointData()
         nt_id = find_array_id_by_name(point_data, "NT")
+        if nt_id is None:
+            raise ValueError(f"{filename} has no NT (nodal temperature) array")
         nt = reader.GetOutput().GetPointData().GetArray(nt_id)
 
         array = numpy_support.vtk_to_numpy(nt)
-        print(f"file: {filename}")
-        print(f"max: {array.max()} K")
-        print(f"min: {array.min()} K")
-        max_K.append(array.max())
-        max_C.append(array.max() - 273.15)
-        min_K.append(array.min())
-        min_C.append(array.min() - 273.15)
-        max_F.append((array.max() - 273.15) * 1.8 + 32)
-        min_F.append((array.min() - 273.15) * 1.8 + 32)
+        columns["max [K]"].append(array.max())
+        columns["max [C]"].append(array.max() - 273.15)
+        columns["max [F]"].append((array.max() - 273.15) * 1.8 + 32)
+        columns["min [K]"].append(array.min())
+        columns["min [C]"].append(array.min() - 273.15)
+        columns["min [F]"].append((array.min() - 273.15) * 1.8 + 32)
+        if regions:
+            points = numpy_support.vtk_to_numpy(reader.GetOutput().GetPoints().GetData())
+        for name, (lo, hi) in regions.items():
+            inside = ((points >= np.array(lo) - 1e-6) & (points <= np.array(hi) + 1e-6)).all(axis=1)
+            if not inside.any():
+                raise ValueError(f"--region {name}: no mesh nodes inside {lo}..{hi} mm")
+            t = array[inside] - 273.15
+            columns[f"{name} max [C]"].append(t.max())
+            columns[f"{name} mean [C]"].append(t.mean())
+            columns[f"{name} min [C]"].append(t.min())
 
-    timesteps = get_timesteps(sta_file)
+    df = pd.DataFrame(data={"time [s]": timesteps, **columns})
 
-    df = pd.DataFrame(
-        data={
-            "time [s]": timesteps,
-            "max [K]": max_K,
-            "max [C]": max_C,
-            "max [F]": max_F,
-            "min [K]": min_K,
-            "min [C]": min_C,
-            "min [F]": min_F,
-        }
-    )
-
-    print()
-    print(f"Collected {len(df)} rows")
-    print(f"Dataframe memory usage {df.memory_usage(index=True).sum()}")
+    print(f"Collected {len(df)} rows from {len(files)} result files")
+    last = df.iloc[-1]
+    print(f"At t = {last['time [s]']} s: max {last['max [C]']:.2f} C, min {last['min [C]']:.2f} C")
+    for name in regions:
+        print(
+            f"  {name}: max {last[f'{name} max [C]']:.2f} C, mean "
+            f"{last[f'{name} mean [C]']:.2f} C, min {last[f'{name} min [C]']:.2f} C"
+        )
     df.to_csv(output_file)
 
 

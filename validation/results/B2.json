@@ -1,0 +1,48 @@
+{
+  "analytic": {
+    "dT_ss": 166.66666666666669,
+    "tau": 574.9333333333334
+  },
+  "meshes": [
+    {
+      "mesh_mm": 5.0,
+      "nodes": 2190,
+      "dT_ss_fit": 166.65429735007007,
+      "tau_fit": 586.3974161658293,
+      "dT_ss_err_%": -0.007421589957967711,
+      "tau_err_%": 1.9939847227207652,
+      "max_curve_err_%": 1.4618437154925148
+    },
+    {
+      "mesh_mm": 2.5,
+      "nodes": 2206,
+      "dT_ss_fit": 166.65429735007007,
+      "tau_fit": 586.3974161658293,
+      "dT_ss_err_%": -0.007421589957967711,
+      "tau_err_%": 1.9939847227207652,
+      "max_curve_err_%": 1.4618437154925148
+    },
+    {
+      "mesh_mm": 1.25,
+      "nodes": 4895,
+      "dT_ss_fit": 166.6444877339016,
+      "tau_fit": 586.3974161658293,
+      "dT_ss_err_%": -0.01330735965905383,
+      "tau_err_%": 1.9939847227207652,
+      "max_curve_err_%": 1.480203342160327
+    }
+  ],
+  "pass": 1.0,
+  "summary": "dT_ss 166.67 K analytic; worst error 0.01 %, tau worst 1.99 % over 3 meshes",
+  "S6_output_frequency_2": {
+    "max_curve_err_%": 1.4618437154925148,
+    "rows": 127,
+    "status": "NOT REPRODUCED"
+  },
+  "S5_stale_vtk": {
+    "vtk_before": 127,
+    "rows": 47,
+    "max_time_in_csv": 1000.0,
+    "status": "NOT REPRODUCED"
+  }
+}

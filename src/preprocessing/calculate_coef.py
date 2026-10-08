@@ -11,6 +11,13 @@ gravity = 9.80665  # m/s^2
 
 log = logging.getLogger(__name__)
 
+# Nusselt number coefficient C and the Rayleigh range where Nu = C * Ra^0.25 holds
+CORRELATIONS = {
+    "vertical": (0.59, 1e4, 1e9),
+    "horizontal_up": (0.54, 1e4, 1e7),
+    "horizontal_down": (0.27, 1e5, 1e10),
+}
+
 
 def calculate_film_coefficient(
     temp_fluid: float, temp_surface: float, orientation: str, length: float
@@ -20,12 +27,11 @@ def calculate_film_coefficient(
     # Nusselt number coefficients for natural convection due to
     # https://www.sfu.ca/~mbahrami/ENSC%20388/Notes/Natural%20Convection.pdf#page=4
     n = 0.25
-    if orientation == "vertical":
-        c = 0.59
-    elif orientation == "horizontal_up":
-        c = 0.54
-    elif orientation == "horizontal_down":
-        c = 0.27
+    if orientation not in CORRELATIONS:
+        raise ValueError(
+            f"Unknown orientation {orientation!r}, use one of: {', '.join(CORRELATIONS)}"
+        )
+    c, ra_min, ra_max = CORRELATIONS[orientation]
     # fmt: off
     if temp_fluid > temp_surface:
         raise Exception("TEMP_FLUID higher than TEMP_SURFACE")
@@ -38,6 +44,13 @@ def calculate_film_coefficient(
     nusselt_number = c * pow(rayleigh_number, n)
     film_coefficient = nusselt_number * fluid_thermal_conductivity / length
     # fmt: on
+    if not ra_min <= rayleigh_number <= ra_max:
+        logging.warning(
+            f"Rayleigh number {rayleigh_number:.3g} is outside the {orientation} "
+            f"correlation range [{ra_min:.0e}, {ra_max:.0e}]; the film coefficient "
+            f"{film_coefficient:.2f} W/m^2/K is extrapolated (L = {length * 1000:g} mm, "
+            f"dT = {temp_surface - temp_fluid:g} K)"
+        )
     heat_flow = film_coefficient * (temp_surface - temp_fluid)
     logging.debug(f"Grashof_number = {grashof_number}")
     logging.debug(f"Prandtl_number = {prandtl_number}")

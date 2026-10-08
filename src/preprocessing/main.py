@@ -14,14 +14,27 @@ custom_level_styles = {
     "error": {"color": "red", "bold": False},
 }
 
+class _LevelPrefix(logging.Filter):
+    """Label warnings and errors so they stand out without colours (logs, CI)."""
+
+    def filter(self, record):
+        record.prefix = f"{record.levelname}: " if record.levelno >= logging.WARNING else ""
+        return True
+
+
 coloredlogs.install(
-    level="INFO", level_styles=custom_level_styles, fmt="%(message)s", encoding="utf-8"
+    level="INFO",
+    level_styles=custom_level_styles,
+    fmt="%(prefix)s%(message)s",
+    encoding="utf-8",
 )
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(_LevelPrefix())
 
 app = typer.Typer(help="Preprocessing utilities")
 
 
-@app.command(help="Generate report.md")
+@app.command(help="Generate a markdown report of the simulation settings")
 def report(
     sim: str = typer.Option(
         "simulation.json", help="Path to simulation settings file (.json)"
@@ -30,21 +43,45 @@ def report(
         "config.json",
         help="Path to simulation config file (config.json)",
     ),
-    report_dir: str = typer.Option(".", help="Path to report directory"),
+    report_dir: str = typer.Option(".", help="Directory to write the report to"),
+    output: str = typer.Option(
+        "simulation_report.md", help="Report file name (inside --report-dir)"
+    ),
 ):
 
-    report_parameters.main(sim, config, report_dir)
+    report_parameters.main(sim, config, report_dir, output)
 
 
 @app.command(help="Generate .inp file and save simulation parameters in .json")
 def parse_fcstd(
     fcstd: str = typer.Option(..., help="Path to freecad design file (.fcstd)"),
-    inp: str = typer.Option(".", help="Path to simulation input file (.inp)"),
-    log: str = typer.Option(".", help="Path to simulation log file (.json)"),
+    inp: str = typer.Option(".", help="Directory for the simulation input file (.inp)"),
+    log: str = typer.Option(".", help="Directory for simulation.json"),
+    cavity_radiation: bool = typer.Option(
+        False,
+        help="Radiation faces exchange heat with each other (view factors), "
+        "not only with the ambient temperature",
+    ),
+    force: bool = typer.Option(
+        False, help="Keep the .inp even if the model checks report errors"
+    ),
 ):
     from preprocessing import parse_fcstd
 
-    parse_fcstd.main(fcstd, inp, log)
+    parse_fcstd.main(fcstd, inp, log, cavity_radiation=cavity_radiation, force=force)
+
+
+@app.command(help="Check a .inp for disconnected parts and hidden boundary faces")
+def check(
+    inp: str = typer.Option(..., help="Path to simulation input file (.inp)"),
+):
+    from preprocessing import check_inp
+
+    result = check_inp.check(inp)
+    result.log()
+    logging.info(f"{result.info}")
+    if result.errors:
+        raise typer.Exit(1)
 
 
 class Orientation(str, Enum):

@@ -1,0 +1,22 @@
+{
+  "meshes": [
+    {
+      "mesh_mm": 4.0,
+      "ccx_dTmax": 374.68399999999997,
+      "elmer_dTmax": 374.7891840598106,
+      "ccx_nodes": 8943,
+      "elmer_nodes": 8149,
+      "diff_%": -0.028064860002430247
+    },
+    {
+      "mesh_mm": 2.0,
+      "ccx_dTmax": 383.976,
+      "elmer_dTmax": 382.71993538033394,
+      "ccx_nodes": 34518,
+      "elmer_nodes": 30296,
+      "diff_%": 0.3281941972575364
+    }
+  ],
+  "pass": true,
+  "summary": "2.0 mm mesh: ccx dTmax 383.98 K vs Elmer 382.72 K (+0.33 %)"
+}

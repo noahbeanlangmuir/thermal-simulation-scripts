@@ -3,8 +3,10 @@ import json
 from pathlib import Path
 
 
-def generate_markdown(report_path: Path, sim_data: dict, config_data: dict) -> None:
-    with open(report_path / "README.md", "w") as f:
+def generate_markdown(
+    report_path: Path, sim_data: dict, config_data: dict, name: str = "simulation_report.md"
+) -> None:
+    with open(report_path / name, "w") as f:
         f.write("### Simulation settings:\n\n")
         for key, value in sim_data.items():
             if isinstance(value, dict):
@@ -30,7 +32,9 @@ def generate_markdown(report_path: Path, sim_data: dict, config_data: dict) -> N
         f.write("\n\n")
 
 
-def main(sim_file: str, config_file: str, report_dir: str) -> None:
+def main(
+    sim_file: str, config_file: str, report_dir: str, output: str = "simulation_report.md"
+) -> None:
     sim_file_path = Path(sim_file).resolve()
     report_path = Path(report_dir).resolve()
     config_file_path = Path(config_file).resolve()
@@ -41,7 +45,7 @@ def main(sim_file: str, config_file: str, report_dir: str) -> None:
     with open(sim_file_path, "r") as f:
         sim_data = json.load(f)
 
-    generate_markdown(report_path, sim_data, config_data)
+    generate_markdown(report_path, sim_data, config_data, output)
 
 
 if __name__ == "__main__":

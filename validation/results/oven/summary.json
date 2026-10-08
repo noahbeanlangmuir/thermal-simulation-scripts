@@ -1,0 +1,180 @@
+{
+  "assumptions": {
+    "room_F": 77.0,
+    "setpoint_F": 200.0,
+    "heater_in": [
+      4.0,
+      4.0
+    ],
+    "heater_eps": 0.9,
+    "block_in": [
+      3.0,
+      2.0,
+      2.0
+    ],
+    "block_face_in": [
+      3.0,
+      2.0
+    ],
+    "block_eps": 0.07,
+    "gap_in": 15.0,
+    "box_in": [
+      24.0,
+      16.0,
+      16.0
+    ],
+    "wall_eps": 0.8,
+    "wall_steel_mm": 1.0,
+    "insulation_in": 1.0,
+    "k_insulation": 0.04,
+    "h_outside": 8.0,
+    "hours": 24.0
+  },
+  "checks": {
+    "view_factor": {
+      "numeric": 0.48921629639927944,
+      "exact": 0.48921629639928,
+      "err_%": -1.1102230246251565e-13
+    },
+    "vs_fem": {
+      "bare": {
+        "lumped_rise_K": 1.215423466417974,
+        "fem_rise_K": 1.223837522953204,
+        "diff_%": -0.6875141820236297,
+        "lumped_t63_min": 52.0,
+        "fem_t63_min": 59.333
+      },
+      "anodised": {
+        "lumped_rise_K": 4.5849659051504545,
+        "fem_rise_K": 4.676058223062398,
+        "diff_%": -1.948057820637794,
+        "lumped_t63_min": 21.75,
+        "fem_t63_min": 24.333000000000002
+      }
+    }
+  },
+  "baseline": {
+    "view_factor_heater_to_block": 0.008216478129148734,
+    "block_final_F": 98.5419082243852,
+    "air_final_F": 99.11276586818018,
+    "wall_final_F": 94.60609142752227,
+    "heater_power_at_end_W": 17.00491451239095,
+    "wall_UA_W_per_K": 1.7385364210526313,
+    "t63_h": 2.216666666666667,
+    "t90_h": 4.516666666666667,
+    "t95_h": 5.8,
+    "hours_to_within_5F_of_setpoint": null
+  },
+  "sensitivity": [
+    {
+      "case": "baseline (4x4 in heater, 1 in insulation, bare)",
+      "block_final_F": 98.5419082243852,
+      "air_final_F": 99.11276586818018,
+      "heater_W": 17.00491451239095,
+      "t63_h": 2.216666666666667,
+      "t90_h": 4.516666666666667,
+      "t95_h": 5.8,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "insulation 0.0 in",
+      "block_final_F": 84.7856532779073,
+      "air_final_F": 85.37610067510587,
+      "heater_W": 19.311454664375084,
+      "t63_h": 1.5166666666666666,
+      "t90_h": 3.6666666666666665,
+      "t95_h": 4.916666666666667,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "insulation 2.0 in",
+      "block_final_F": 109.35114522632833,
+      "air_final_F": 109.90097272830685,
+      "heater_W": 15.184497701323359,
+      "t63_h": 3.1333333333333333,
+      "t90_h": 6.283333333333333,
+      "t95_h": 7.966666666666667,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "insulation 4.0 in",
+      "block_final_F": 125.23078042877859,
+      "air_final_F": 125.73371582122272,
+      "heater_W": 12.498427708823417,
+      "t63_h": 5.15,
+      "t90_h": 10.75,
+      "t95_h": 13.7,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "heater 8x8 in",
+      "block_final_F": 131.0604427633942,
+      "air_final_F": 132.0429905976337,
+      "heater_W": 45.15168755637234,
+      "t63_h": 1.7333333333333334,
+      "t90_h": 3.55,
+      "t95_h": 4.6,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "heater 12x12 in",
+      "block_final_F": 154.9440442748388,
+      "air_final_F": 156.08273644463046,
+      "heater_W": 66.99989637747056,
+      "t63_h": 1.4166666666666667,
+      "t90_h": 3.0,
+      "t95_h": 3.933333333333333,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "heater 12x12 in + 4 in insulation",
+      "block_final_F": 181.0017014471155,
+      "air_final_F": 181.61847258380735,
+      "heater_W": 27.68997924370606,
+      "t63_h": 2.05,
+      "t90_h": 4.15,
+      "t95_h": 5.3,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "block eps 0.04",
+      "block_final_F": 98.73574256677237,
+      "air_final_F": 99.11531132646446,
+      "heater_W": 17.004707839811363,
+      "t63_h": 2.283333333333333,
+      "t90_h": 4.7,
+      "t95_h": 6.066666666666666,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "block eps 0.12",
+      "block_final_F": 98.2846804541691,
+      "air_final_F": 99.10908750490752,
+      "heater_W": 17.005218019534784,
+      "t63_h": 2.1333333333333333,
+      "t90_h": 4.283333333333333,
+      "t95_h": 5.45,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "block eps 0.85",
+      "block_final_F": 96.87524958049971,
+      "air_final_F": 99.08545857271035,
+      "heater_W": 17.007405064887532,
+      "t63_h": 1.5833333333333333,
+      "t90_h": 3.066666666666667,
+      "t95_h": 3.8333333333333335,
+      "hours_to_within_5F": null
+    },
+    {
+      "case": "perfectly insulated box",
+      "block_final_F": 199.97196856504632,
+      "air_final_F": 199.9720978598424,
+      "heater_W": 0.0035602449471195674,
+      "t63_h": 7.916666666666667,
+      "t90_h": 17.5,
+      "t95_h": 22.833333333333332,
+      "hours_to_within_5F": 24.5
+    }
+  ]
+}

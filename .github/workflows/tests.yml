@@ -1,0 +1,22 @@
+name: tests
+
+# Fast checks that need no FreeCAD/CalculiX/ParaView: unit tests and the
+# silent-failure audit (FreeCAD is stubbed). The full accuracy benchmarks need
+# the toolchain, see validation/SETUP.md.
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - name: Unit tests
+        run: python -m pytest validation -q
+      - name: Silent-failure audit
+        run: python validation/silent/run_silent_audit.py --strict

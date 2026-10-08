@@ -1,0 +1,22 @@
+{
+  "view_factor": 0.48921629639928,
+  "TB_exact_K": 374.7419229244522,
+  "meshes": [
+    {
+      "mesh_mm": 5.0,
+      "CR_faces": 508,
+      "TB_sim_K": 374.7582223382046,
+      "rise_err_%": 0.021280851988092486,
+      "still_rising_K": 0.0
+    },
+    {
+      "mesh_mm": 2.5,
+      "CR_faces": 2084,
+      "TB_sim_K": 374.74213356990776,
+      "rise_err_%": 0.00027502306709781266,
+      "still_rising_K": 0.0
+    }
+  ],
+  "pass": true,
+  "summary": "F=0.4892; cold plate 101.59 C vs exact 101.59 C; worst rise error 0.02 %"
+}

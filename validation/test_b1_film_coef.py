@@ -1,8 +1,6 @@
 """B1: film coefficient calculator (src/preprocessing/calculate_coef.py).
 
-Tests marked xfail(strict=True) document confirmed defects. When a defect is
-fixed the test starts passing, strict xfail turns that into a failure, and the
-marker should be removed so the test guards the fix.
+The S13 tests at the end guard fixes for defects found by the validation.
 """
 
 import logging
@@ -53,18 +51,14 @@ def test_bias_vs_textbook_is_bounded(orientation):
     assert math.isclose(h, h_ref, rel_tol=0.25)
 
 
-@pytest.mark.xfail(
-    strict=True, reason="S13: unknown orientation raises UnboundLocalError"
-)
 def test_unknown_orientation_gives_clear_error():
+    """S13 regression: a typo used to raise UnboundLocalError."""
     with pytest.raises(ValueError):
         calculate_film_coefficient(25.0, 65.0, "Vertical", 50.0)
 
 
-@pytest.mark.xfail(
-    strict=True, reason="S13: no warning outside the correlation's Ra range"
-)
 def test_warns_outside_rayleigh_validity(caplog):
+    """S13 regression: extrapolating the correlation used to be silent."""
     # 3 mm part, 5 K rise: Ra ~ 1e2, far below the 1e4 lower limit
     with caplog.at_level(logging.WARNING):
         calculate_film_coefficient(25.0, 30.0, "vertical", 3.0)

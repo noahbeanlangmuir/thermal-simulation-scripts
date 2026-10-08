@@ -20,6 +20,7 @@ You can learn more about the project from the following [blog note](https://antm
    - [Generating graphs](#generating-graphs)
    - [Generating previews](#generating-previews)
 3. [Example walkthrough](#example-simulation-walkthrough)
+   - [Common mistakes](#common-mistakes)
 4. [Licensing](#licensing)
 
 ---
@@ -37,6 +38,9 @@ The `thermal-simulation-scripts` pipeline has been tested and validated with the
 - `FreeCAD` = 1.0.0
 - `ccx2paraview`
 - `ffmpeg`
+- `jq` (automated film coefficient estimation)
+
+> **Windows / no root access:** run everything inside WSL2. [validation/SETUP.md](validation/SETUP.md) has a step-by-step guide and a no-sudo install script (`validation/install_user.sh`). Clone the repository inside WSL, not on the Windows drive, so the shell scripts keep Unix line endings.
 
 On Debian-based systems, these dependencies can be installed using:
 
@@ -111,8 +115,19 @@ tpre parse-fcstd --fcstd <path_to_fcstd> --inp [inp_dir] --log [settings_dir]
 ```
 
 - `<path_to_fcstd>`: Path to FreeCad design file (`.FCStd`)
-- `[inp_directory]`: Optional output directory for generating simulation input file (`.inp`)
-- `[setting_dir]`: Optional output directory for generating simulation settings file (`.json`)
+- `[inp_dir]`: Optional output directory for the simulation input file (`.inp`)
+- `[settings_dir]`: Optional output directory for the simulation settings file (`simulation.json`)
+- `--cavity-radiation`: Radiation faces exchange heat with each other using view factors, not only with the ambient temperature. Use it when parts are separated by a gap or sit in an enclosure.
+- `--force`: Keep the `.inp` even if the model checks below report errors.
+
+The `.inp` is named after the FreeCAD mesh object (`FEMMeshGmsh.inp` by default). The name is printed at the end and stored in `simulation.json` as `"Input file"`.
+
+`parse-fcstd` checks the generated model and stops with an error if:
+
+- touching parts were meshed separately, so no heat can flow between them (fuse them first, see [Common mistakes](#common-mistakes));
+- a convection/radiation/heat flux constraint covers a face that is hidden inside the model.
+
+It also prints the total heat input. The same checks can be run on any `.inp` with `tpre check --inp <file>`.
 
 #### Generating simulation settings report
 
@@ -120,20 +135,23 @@ To generate report in markdown format use the following command.
 The report includes data from `simulation.json`, and optionally, user comments provided under the `user_comments` key in config.json.
 
 ```bash
-tpre report --sim [path_to_settings_file] --config [path_to_config_file] --report-dir [report dir]
+tpre report --sim [path_to_settings_file] --config [path_to_config_file] --report-dir [report_dir] --output [file_name]
 ```
 
 - `[path_to_settings_file]`: Optional path to simulation settings file (`simulation.json`)
 - `[path_to_config_file]`: Optional path to config file (`config.json`)
-- `[report dir]`: Optional path to report file (`.md`)
+- `[report_dir]`: Optional directory for the report (default: current directory)
+- `[file_name]`: Optional report file name (default: `simulation_report.md`)
 
 ### Running the simulation
 
 To run the simulation using CalculiX:
 
 ```bash
-ccx <path_to_inp_file>
+ccx <inp_name_without_extension>
 ```
+
+Use the name printed by `tpre parse-fcstd` (e.g. `ccx FEMMeshGmsh`).
 
 Refer to the [CalculiX manual](http://www.dhondt.de/) for further details.
 
@@ -142,25 +160,30 @@ Refer to the [CalculiX manual](http://www.dhondt.de/) for further details.
 #### Converting simulation results
 
 ```bash
-ccx2paraview <frd_file> vtk
+tpost convert --frd <frd_file> --vtk [vtk_directory]
 ```
 
-- `<frd_file>`: Path to the CalculiX output `.frd` file.
+- `<frd_file>`: Path to the CalculiX output `.frd` file (default `FEMMeshGmsh.frd`).
+- `[vtk_directory]`: Directory for the `.vtk` files (default `vtk`). Old `.vtk` files in it are removed first so results of different runs are never mixed.
 
 #### Generating CSV files
 
 ```bash
-tpost csv --vtk [vtk_directory] --sta [sta_file] --output [output_file]
+tpost csv --vtk [vtk_directory] --sta [sta_file] --output [output_file] --region [NAME=xmin,ymin,zmin,xmax,ymax,zmax]
 ```
 
 - `[vtk_directory]`: Optional path to directory with `.vtk` files.
 - `[sta_file]`: Optional path to `.sta` file (output from CalculiX).
 - `[output_file]`: Optional path for the output CSV file.
+- `--region`: Optional, repeatable. Adds max/mean/min columns for the mesh nodes inside a box (mm), e.g. one per component: `--region block=25,0,0,45,50,50`.
 
 The output CSV contains:
 
 - Time [s]
-- Maximum/Minimum temperature in Kelvin and Celsius
+- Maximum/Minimum temperature of the whole model in Kelvin, Celsius and Fahrenheit
+- Max/mean/min temperature [C] of each `--region`
+
+The whole-model maximum is often a heat source held at a fixed temperature; use `--region` to get the temperature of the part you care about.
 
 ### Generating graphs
 
@@ -184,10 +207,10 @@ All of them will be saved in `/graphs/`.
 To compare characteristics on a common graph use:
 
 ```bash
-tpost compare-csv --csv1 <1st_csv_file> --csv2 <2nd_csv_file>
+tpost compare-csv --csv1 <1st_csv_file> --csv2 <2nd_csv_file> --output comparison.png
 ```
 
-Run `tpost compare-csv --help` for advanced options.
+Both CSV files need the `time [s]` and `max [C]` (or `max [K]` / `max [F]`) columns written by `tpost csv`. The graph is saved to `--output`; add `--show` to also open it in a window. Run `tpost compare-csv --help` for advanced options.
 
 ### Visualizing simulation in ParaView
 
@@ -263,7 +286,7 @@ composite -gravity east scale.png <frame.png> <output.png>
 where:
 
 - `<height>` is the height of the frame in pixels.  
-- `<scale.svg>` is the color bar `.svg` generated using [`generate_svg_palette`](/src/postprocessing/generate_svg_palette.py).  
+- `<scale.svg>` is the color bar `.svg` generated using [`generate_svg_palette`](/src/postprocessing/generate_svg_palette.py). Run it in the folder where `tpost generate-gltf` wrote `gltf/range.json` so the labels match the colours.  
 - `<frame.png>` is the frame image rendered with PCBooth.  
 - `<output.png>` is the output path where the frame and color bar are combined.
 
@@ -305,9 +328,7 @@ ccx FEMMeshGmsh
 #### Convert results
 
 ```bash
-ccx2paraview FEMMeshGmsh.frd vtk
-mkdir -p vtk
-mv *.vtk vtk/
+tpost convert --frd FEMMeshGmsh.frd
 ```
 
 #### Visualize with ParaView
@@ -335,6 +356,17 @@ ffmpeg -framerate 5 -i animations/BOTTOM_%6d.png animations/bottom.webm
 tpost generate-gltf
 ../src/postprocessing/blender_animation.sh gltf
 ```
+
+### Common mistakes
+
+These give plausible-looking but wrong results. `tpre parse-fcstd` catches the first two.
+
+- **Touching parts not fused.** If a component and a board are meshed as separate solids, they share no mesh nodes and no heat flows between them. Select the parts, use *Part > Split > Boolean Fragments* (Mode: CompSolid), and mesh that object.
+- **Constraints on the original part's faces.** After fusing, pick the faces of the Boolean Fragments object. A face of the original board also covers the area under the component, and convection applied there removes heat that cannot leave (the validation board read 27% too cool).
+- **Mesh too coarse.** Check that the result does not change when you halve the mesh size. On the validation board an 8 mm mesh read 11% low, 4 mm read 2.5% low and 2 mm was converged.
+- **Ignoring radiation.** On boards near room temperature, radiation (about 6 W/m²K at emissivity 0.9) is about as large as natural convection. Add a Radiation heat flux constraint, and use `--cavity-radiation` when parts can see each other.
+- **Horizontal plate length.** For horizontal surfaces, use area / perimeter as the characteristic length (see [Config](#config)).
+- **Not at steady state.** The run is transient; if `temperature.csv` is still rising at the end, increase Time End.
 
 ---
 
@@ -381,7 +413,7 @@ Config for this example can be found in [config.json](/designs/config.json).
 
 The 1st argument is the path to the `.FCStd` file and the 2nd argument is the path to the `/designs/` directory.
 
-Convergence temperature and calculated coefficients are displayed at the end of the log.
+The script stops at the first failing step and points to its log in `designs/find_coef_logs/`. On convergence the temperature is saved in `config.json` as `bisected_temp` and the film coefficients are printed. Exit codes: 0 converged, 2 temperature outside the `min`/`max` range, 3 the simulation is still heating up by more than half the tolerance (increase Time End), 4 no convergence within `MAX_ITER` iterations (default 20, set the environment variable to change it).
 
 ---
 
@@ -416,13 +448,13 @@ It also allows adding user comments to the simulation report. Allowed fields wit
 ```
 
 - `<constraint_name>` is the constraint name defined in FreeCad
-- `<characteristic_length>` is height (in case of vertical plane approximation) or the smaller dimension (in case of horizontal plane approximation) [mm]
+- `<characteristic_length>` is the height (vertical surfaces) or area / perimeter (horizontal surfaces, e.g. 22.2 mm for a 100 x 80 mm board) [mm]
 - `<orientation>` is `vertical`,`horizontal_up` or `horizontal_down`
 - `<max_temp>` is the upper boundary of automatic film coefficient search area [Celsius]
 - `<min_temp>` is the lower boundary of automatic film coefficient search area [Celsius]
 - `<tol>` is the acceptable difference of calculated and simulated temperature in automatic film coefficient search [Celsius]
-- `camera_custom` stores Blender camera data and is defined automatically with `tpost save-config`
-- `user_comments` the content of it will be parsed to the README.md with `tpost report` command
+- `camera_custom` stores Blender camera data and is defined automatically with `tpost save-camera`
+- `user_comments` the content of it will be added to the report written by `tpre report`
 
 ## Licensing
 

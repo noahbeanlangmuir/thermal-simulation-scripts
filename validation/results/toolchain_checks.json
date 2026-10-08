@@ -1,0 +1,18 @@
+{
+  "S4": {
+    "tpre_rc": 0,
+    "inp_written": [
+      "FEMMeshNetgen.inp"
+    ],
+    "simulation_json_input_file": "FEMMeshNetgen.inp",
+    "tpre_prints_ccx_command": true,
+    "readme_ccx_rc": 201,
+    "readme_ccx_msg": " *ERROR in readinput: cannot open file FEMMeshGmsh.inp",
+    "status": "NOT REPRODUCED"
+  },
+  "S21_board_only": {
+    "board_dTmax": 0.0,
+    "package_dTmean": 2000.0798571428568,
+    "end_time_s": 20000.0
+  }
+}

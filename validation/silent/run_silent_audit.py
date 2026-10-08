@@ -6,7 +6,8 @@ ParaView are listed as NEEDS TOOLCHAIN.
 
 FreeCAD is stubbed (see _stubs.py), so this runs with plain Python + bash:
     python validation/silent/run_silent_audit.py
-Results are written to validation/silent/results.md.
+Results are written to validation/silent/results.md. With --strict the
+script exits 1 if any failure is still reproduced (used by CI).
 """
 
 import io
@@ -117,29 +118,63 @@ def s1():
         _stubs.FakeFea.inp_written = 0
         real_popen = parse_fcstd.subprocess.Popen
         parse_fcstd.subprocess.Popen = FakePopen
+        raised = None
         try:
             with LogCapture() as logs:
                 parse_fcstd.main(str(d / "design.FCStd"), str(d), str(d))
+        except (RuntimeError, SystemExit) as e:
+            raised = e
         finally:
             parse_fcstd.subprocess.Popen = real_popen
             _stubs.FakeFea.prerequisite_message = ""
         errors = [r.getMessage() for r in logs.at_least(logging.ERROR)]
         sim_json = (d / "simulation.json").exists()
-        unchanged = stale.stat().st_mtime == old_mtime
+        unchanged = stale.exists() and stale.stat().st_mtime == old_mtime
     if sim_json and unchanged and _stubs.FakeFea.inp_written == 0:
         return CONFIRMED, (
             f"main() returned normally (CLI exit 0); logged {errors}; "
             "simulation.json written; stale FEMMeshGmsh.inp left in place for ccx"
         )
-    return NOT_REPRODUCED, f"sim_json={sim_json} unchanged={unchanged}"
+    return NOT_REPRODUCED, (
+        f"tpre stops: {type(raised).__name__}: {raised}; simulation.json written: {sim_json}; "
+        f"stale .inp still present: {unchanged}")
 
 
 # ------------------------------------------------------------------- S2 / S3
-def _find_coef_harness(stale_csv_max_c, timeout=90):
+JQ_EMULATION = r"""
+import json, re, sys
+args, raw, argjson, filt, files, i = sys.argv[1:], False, {}, None, [], 0
+while i < len(args):
+    a = args[i]
+    if a == "-r":
+        raw = True
+    elif a == "--argjson":
+        argjson[args[i + 1]] = json.loads(args[i + 2]); i += 2
+    elif filt is None:
+        filt = a
+    else:
+        files.append(a)
+    i += 1
+data = json.load(open(files[0]))
+m = re.fullmatch(r"\.(\w+) = \$(\w+)", filt)
+if m:
+    data[m.group(1)] = argjson[m.group(2)]
+    print(json.dumps(data)); sys.exit()
+val = data
+for quoted, plain in re.findall(r'"([^"]+)"|(\w+)', filt):
+    val = val[quoted or plain]
+print(val if raw and not isinstance(val, (dict, list)) else json.dumps(val))
+"""
+
+
+def _find_coef_harness(stale_csv_max_c=None, source_csv_max_c=None, tools_ok=False,
+                       timeout=90):
     """Run the real find_coef.sh with stubbed tools on PATH.
 
-    ccx, ccx2paraview and tpost always fail. tpre bisect-temperature runs the
-    real bisection code. Returns (rc, iterations, bisect rcs, stderr, files).
+    tools_ok=False: ccx, ccx2paraview and tpost fail. tools_ok=True: they
+    succeed and `tpost csv` writes a CSV peaking at source_csv_max_c (none if
+    None). stale_csv_max_c leaves an old temperature.csv in the folder.
+    tpre bisect-temperature runs the real bisection code.
     """
     bash = shutil.which("bash")
     tmp = Path(tempfile.mkdtemp(prefix="find_coef_"))
@@ -154,25 +189,32 @@ def _find_coef_harness(stale_csv_max_c, timeout=90):
             }
         )
     )
-    if stale_csv_max_c is not None:
+
+    def csv_rows(peak):
         rows = [",time [s],max [K],max [C]"]
-        for i, t in enumerate([30.0, 40.0, stale_csv_max_c]):
+        for i, t in enumerate([30.0, 40.0, peak, peak]):
             rows.append(f"{i},{i * 10.0},{t + 273.15},{t}")
-        (designs / "temperature.csv").write_text("\n".join(rows) + "\n")
+        return "\n".join(rows) + "\n"
+
+    if stale_csv_max_c is not None:
+        (designs / "temperature.csv").write_text(csv_rows(stale_csv_max_c))
+    if source_csv_max_c is not None:
+        (tmp / "source.csv").write_text(csv_rows(source_csv_max_c))
+    (tmp / "jq.py").write_text(JQ_EMULATION)
 
     def stub(name, body):
-        (stubs / name).write_text("#!/bin/bash\n" + body + "\n", newline="\n")
+        path = stubs / name
+        path.write_text("#!/bin/bash\n" + body + "\n", newline="\n")
+        path.chmod(0o755)  # required on Linux; Git Bash ignores it
 
-    stub("ccx", "exit 1")
-    stub("ccx2paraview", "exit 1")
-    stub("tpost", "exit 1")
-    stub(
-        "jq",
-        'key=max; case "$2" in *min*) key=min;; esac\n'
-        '"$PYTHON" -c "import json,sys; '
-        "print(json.load(open(sys.argv[1]))['temperature'][sys.argv[2]])\" "
-        '"$3" "$key"',
-    )
+    ok = "exit 0" if tools_ok else "exit 1"
+    stub("ccx", ok)
+    stub("ccx2paraview", ok)
+    stub("tpost", (
+        'if [ "$1" = csv ] && [ -f "$HARNESS/source.csv" ]; then\n'
+        '  while [ $# -gt 0 ]; do [ "$1" = --output ] && cp "$HARNESS/source.csv" "$2"; shift; done\n'
+        "fi\n" + ok) if tools_ok else ok)
+    stub("jq", '"$PYTHON" "$HARNESS/jq.py" "$@"')
     stub(
         "tpre",
         'cmd=$1; shift\n'
@@ -181,6 +223,9 @@ def _find_coef_harness(stale_csv_max_c, timeout=90):
         '    n=$(( $(cat "$HARNESS/iterations" 2>/dev/null || echo 0) + 1 ))\n'
         '    echo $n > "$HARNESS/iterations"\n'
         '    if [ "$n" -gt 25 ]; then kill -TERM $PPID; exit 1; fi ;;\n'
+        "  parse-fcstd)\n"
+        '    while [ $# -gt 0 ]; do [ "$1" = --log ] && echo \'{"Input file": "FEMMeshGmsh.inp", '
+        '"Heat Dissipation": {}}\' > "$2/simulation.json"; shift; done ;;\n'
         "  bisect-temperature)\n"
         '    while [ $# -gt 0 ]; do case "$1" in --config) cfg=$2; shift 2;; '
         "--csv) csv=$2; shift 2;; *) shift;; esac; done\n"
@@ -213,8 +258,9 @@ def _find_coef_harness(stale_csv_max_c, timeout=90):
             timeout=timeout,
         )
         rc = proc.returncode
+        script_err = proc.stderr.strip().splitlines()
     except subprocess.TimeoutExpired:
-        rc = "timeout"
+        rc, script_err = "timeout", []
     elapsed = time.time() - start
 
     def read(name):
@@ -227,6 +273,7 @@ def _find_coef_harness(stale_csv_max_c, timeout=90):
     config = json.loads((designs / "config.json").read_text())
     temp_config_left = (designs / "temp_config.json").exists()
     shutil.rmtree(tmp, ignore_errors=True)
+    stderr += "\n" + "\n".join(script_err)
     return rc, iterations, bisect_rcs, stderr, config, temp_config_left, elapsed
 
 
@@ -241,12 +288,13 @@ def s2():
             f"Result saved to config.json: {'bisected_temp' in config}; "
             f"temp_config.json left: {left} (S3: result lost)"
         )
-    return NOT_REPRODUCED, f"rc={rc} iterations={its} bisect rcs={rcs}"
+    first_err = next((l for l in err.splitlines() if l.startswith("ERROR")), "")
+    return NOT_REPRODUCED, f"find_coef.sh stopped with exit {rc} after {its} iteration(s): {first_err}"
 
 
 @check("S3a", "Python crash in bisection loops forever (exit 1 == retry)", "S-Major")
 def s3a():
-    rc, its, rcs, err, *_ = _find_coef_harness(stale_csv_max_c=None)
+    rc, its, rcs, err, *_ = _find_coef_harness(tools_ok=True)
     last_err = err.strip().splitlines()[-1] if err.strip() else ""
     if its >= 25 and set(rcs) == {"1"}:
         return CONFIRMED, (
@@ -258,7 +306,7 @@ def s3a():
 
 @check("S3b", "Out-of-range bisection result makes find_coef.sh exit 0", "S-Major")
 def s3b():
-    rc, its, rcs, err, *_ = _find_coef_harness(stale_csv_max_c=200.0)
+    rc, its, rcs, err, *_ = _find_coef_harness(tools_ok=True, source_csv_max_c=200.0)
     if rc == 0 and rcs and rcs[-1] == "2":
         return CONFIRMED, (
             "bisection exited 2 ('above the upper bound'), find_coef.sh exited 0, "
@@ -271,11 +319,11 @@ def s3b():
 @check("S7", "tpost preview/animation/generate-gltf ignore pvpython exit code", "S-Major")
 def s7():
     text = (SRC / "postprocessing" / "main.py").read_text()
-    calls = re.findall(r"subprocess\.run\((.*)\)", text)
-    unchecked = [c for c in calls if "check=True" not in c]
-    if unchecked:
-        return STATIC, f"{len(unchecked)} subprocess.run(...) calls without check=True"
-    return NOT_REPRODUCED, ""
+    pv_calls = re.findall(r"subprocess\.run\(\[\"pvpython\".*", text)
+    guarded = "p.returncode != 0" in text and "wrote nothing" in text
+    if pv_calls and not guarded:
+        return STATIC, f"{len(pv_calls)} pvpython calls whose exit code and output are not checked"
+    return NOT_REPRODUCED, "pvpython runs through _run_pvpython: checks vtk/ input, exit code and output files"
 
 
 # --------------------------------------------------------------------------- S8
@@ -524,12 +572,92 @@ def s22():
     return NOT_REPRODUCED, ""
 
 
+# -------------------------------------------------------------------------- S23
+@check("S23", "Importing FreeCAD reorders PATH; wrong ccx version reported", "S-Minor")
+def s23():
+    fc = Path(os.environ.get("FREECAD_PATH", "/nonexistent"))
+    if not (fc / "usr/lib/python3.11/site-packages").is_dir():
+        return TOOLCHAIN, "requires a real FreeCAD install in FREECAD_PATH"
+    code = (
+        "import os, sys, shutil; before = shutil.which('ccx'); fc = sys.argv[1]; "
+        "sys.path.insert(0, fc + '/usr/lib/python3.11/site-packages'); "
+        "sys.path.append(fc + '/usr/lib'); import FreeCAD; "
+        "print(before); print(shutil.which('ccx'))"
+    )
+    p = subprocess.run(
+        [sys.executable, "-c", code, str(fc)], capture_output=True, text=True
+    )
+    lines = p.stdout.strip().splitlines()[-2:]
+    src_text = (SRC / "preprocessing" / "parse_fcstd.py").read_text()
+    fixed = 'USER_CCX = shutil.which("ccx")' in src_text and (
+        src_text.index("USER_CCX = shutil.which") < src_text.index("import FreeCAD"))
+    if len(lines) == 2 and lines[0] != lines[1] and fixed:
+        return NOT_REPRODUCED, (
+            f"FreeCAD still moves its own ccx first on PATH ({lines[1]}), but tpre records the "
+            f"user's ccx ({lines[0]}) before importing FreeCAD")
+    if len(lines) == 2 and lines[0] != lines[1]:
+        return CONFIRMED, (
+            f"`ccx` on the user's PATH is {lines[0]}, but after `import FreeCAD` "
+            f"it resolves to {lines[1]}; tpre parse-fcstd records that version in "
+            "simulation.json while the user runs the other one"
+        )
+    return NOT_REPRODUCED, f"{lines}"
+
+
+# -------------------------------------------------------------------------- S19
+@check("S19", "Blender loop: a failed render silently shifts/drops frames", "S-Minor")
+def s19():
+    """Run the real blender_animation.sh with stubbed yq/rsvg-convert/tpost/
+    pcbooth/composite/ffmpeg. pcbooth 'crashes' on the 3rd frame."""
+    bash = shutil.which("bash")
+    tmp = Path(tempfile.mkdtemp(prefix="s19_"))
+    work, stubs, scripts = tmp / "designs", tmp / "bin", tmp / "scripts"
+    for d in (work / "gltf", stubs, scripts):
+        d.mkdir(parents=True)
+    shutil.copy(SRC / "postprocessing" / "blender_animation.sh", scripts)
+    shutil.copy(SRC / "postprocessing" / "colormap_scale.svg", scripts)
+    for i in range(5):
+        (work / "gltf" / f"{i:04d}.gltf").write_text("{}")
+
+    def stub(name, body):
+        p = stubs / name
+        p.write_text("#!/bin/bash\n" + body + "\n", newline="\n")
+        p.chmod(0o755)
+
+    stub("yq", "echo 1080")
+    stub("rsvg-convert", 'while [ $# -gt 0 ]; do [ "$1" = -o ] && touch "$2"; shift; done')
+    stub("tpost", 'while [ $# -gt 0 ]; do [ "$1" = --blend ] && touch "$2"; shift; done')
+    stub("composite", "exit 0")
+    stub("ffmpeg", 'echo "$@" >> "$HARNESS/ffmpeg_args"')
+    stub("pcbooth",
+         'n=$(( $(cat "$HARNESS/calls" 2>/dev/null || echo 0) + 1 )); echo $n > "$HARNESS/calls"\n'
+         'mkdir -p renders\n'
+         'if [ "$n" -eq 3 ]; then echo "render crashed" >&2; exit 1; fi\n'
+         'sleep 0.05; echo "content of frame $((n - 1))" > "renders/render_$n.png"')
+    env = dict(os.environ)
+    env.update(PATH=str(stubs) + os.pathsep + env["PATH"], HARNESS=tmp.as_posix())
+    p = subprocess.run([bash, (scripts / "blender_animation.sh").as_posix(), "gltf"],
+                       cwd=work, env=env, capture_output=True, text=True, timeout=60)
+    frames = {f.name: f.read_text().strip() for f in sorted((work / "renders").glob("*.png"))}
+    shutil.rmtree(tmp, ignore_errors=True)
+    expected = {f"{i:04d}.png" for i in range(5)}
+    missing = sorted(expected - set(frames))
+    wrong = {k: v for k, v in frames.items()
+             if k in expected and v != f"content of frame {int(k[:4])}"}
+    if p.returncode == 0 and (missing or wrong):
+        return CONFIRMED, (
+            f"pcbooth failed on frame 0002 but the script printed 'Processing completed' and exited 0. "
+            f"Missing frames: {missing}; frames with another frame's image: {wrong}. "
+            "ffmpeg's %04d input stops at the first gap, so the video silently ends early"
+        )
+    return NOT_REPRODUCED, f"rc={p.returncode} frames={frames}"
+
+
 # ------------------------------------------------------------- toolchain-only
 TOOLCHAIN_ONLY = [
     ("S4", "Hardcoded FEMMeshGmsh name", "S-Major"),
     ("S5", "Stale .vtk files mixed into new CSV", "S-Blocker"),
     ("S6", ".sta/.vtk misalignment when output frequency != 1", "S-Blocker"),
-    ("S19", "Blender loop duplicates frames when pcbooth fails", "S-Minor"),
     ("S20", "CFlux total power vs mesh density", "S-Blocker"),
     ("S21", "Non-conformal mesh: no conduction between solids", "S-Blocker"),
 ]
@@ -538,7 +666,7 @@ TOOLCHAIN_ONLY = [
 def main():
     checks = [
         s1, s2, s3a, s3b, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17,
-        s18, s22,
+        s18, s19, s22, s23,
     ]
     for c in checks:
         with redirect_stdout(io.StringIO()):
@@ -567,6 +695,12 @@ def main():
     (HERE / "results.md").write_text(out, encoding="utf-8")
     for sid, title, sev, status, _ in RESULTS:
         print(f"{sid:5} {status:20} {sev:10} {title}")
+    if "--strict" in sys.argv:
+        bad = [r[0] for r in RESULTS if r[3].startswith("CONFIRMED") or r[3] == "CHECK ERROR"]
+        if bad:
+            print(f"--strict: still present: {', '.join(bad)}")
+            sys.exit(1)
+        print("--strict: no silent failures reproduced")
 
 
 if __name__ == "__main__":
